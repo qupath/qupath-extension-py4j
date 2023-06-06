@@ -377,10 +377,7 @@ public class QuPathPy4JExtension implements QuPathExtension {
 	
 			@Override
 			public void serverStopped() {
-				if (gatewayRunning.get()) {
-					logger.info("Py4J gateway stopped");
-					gatewayRunning.set(false);
-				}
+				logger.debug("Py4J gateway stopped");
 			}
 			
 		}

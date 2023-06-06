@@ -3,7 +3,7 @@ plugins {
   // To create a shadow/fat jar, including dependencies
   id 'com.github.johnrengelman.shadow' version '7.0.0'
   // To manage included native libraries
-  id 'org.bytedeco.gradle-javacpp-platform' version '1.5.8'
+  id 'org.bytedeco.gradle-javacpp-platform'
 }
 
 repositories {
@@ -29,8 +29,7 @@ description = 'Connect QuPath to Python using Py4J'
 version = "0.0.1-SNAPSHOT"
 
 dependencies {
-    def qupathVersion = "0.4.0-SNAPSHOT" // For now
-//    def qupathVersion = "0.3.2" // For now
+    def qupathVersion = "0.4.3" // For now
 
     shadow "io.github.qupath:qupath-gui-fx:${qupathVersion}"
     shadow 'org.kordamp.ikonli:ikonli-javafx:12.3.1'
@@ -76,11 +75,19 @@ java {
  * Create javadocs for all modules/packages in one place.
  * Use -PstrictJavadoc=true to fail on error with doclint (which is rather strict).
  */
-def strictJavadoc = findProperty('strictJavadoc')
-if (!strictJavadoc) {
-    tasks.withType(Javadoc) {
+tasks.withType(Javadoc) {
+	options.encoding = 'UTF-8'
+	def strictJavadoc = findProperty('strictJavadoc')
+	if (!strictJavadoc) {
         options.addStringOption('Xdoclint:none', '-quiet')
-    }
+	}
+}
+
+/*
+ * Set encoding
+ */
+tasks.named('compileJava') {
+	options.encoding = 'UTF-8'
 }
 
 /*

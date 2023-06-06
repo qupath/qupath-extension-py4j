@@ -18,13 +18,14 @@
 package qupath.ext.py4j;
 
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
+import javax.imageio.ImageIO;
 
 import com.google.gson.JsonElement;
 import com.google.gson.reflect.TypeToken;
@@ -32,7 +33,6 @@ import com.google.gson.reflect.TypeToken;
 import ij.ImagePlus;
 import ij.io.FileSaver;
 import qupath.imagej.tools.IJTools;
-import qupath.lib.awt.common.BufferedImageTools;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.commands.SummaryMeasurementTableCommand;
@@ -48,7 +48,6 @@ import qupath.lib.io.GsonTools;
 import qupath.lib.objects.PathObject;
 import qupath.lib.regions.RegionRequest;
 import qupath.lib.roi.interfaces.ROI;
-import qupath.lib.scripting.QP;
 
 /**
  * Entry point for use with a Py4J Gateway.
@@ -58,51 +57,18 @@ import qupath.lib.scripting.QP;
  */
 public class QuPathEntryPoint extends QPEx {
 	
-	public static QuPathGUI getQuPath() {
-		return QuPathGUI.getInstance();
-	}
-	
 	public static String getExtensionVersion() {
 		return GeneralTools.getPackageVersion(QuPathEntryPoint.class);
 	}
 	
-	public static byte[] snapshot(QuPathGUI qupath) {
-		return toTiffBytes(GuiTools.makeSnapshot(qupath, SnapshotType.MAIN_SCENE));
+	public static byte[] snapshot(QuPathGUI qupath) throws IOException {
+		return getImageBytes(GuiTools.makeSnapshot(qupath, SnapshotType.MAIN_SCENE), "png");
 	}
 
-	public static byte[] snapshot(QuPathViewer viewer) {
-		return toTiffBytes(GuiTools.makeViewerSnapshot(viewer));
-	}
-
-	public static ImageData<BufferedImage> getCurrentImageData() {
-		var imageData = QP.getCurrentImageData();
-		if (imageData == null)
-			imageData = getImageData();
-		System.err.println("Returning image: " + imageData);
-		return imageData;
-	}
-
-	public static ImageData<BufferedImage> getImageData() {
-		var qupath = getQuPath();
-		return qupath == null ? null : qupath.getImageData();
-	}
-
-	public static ImageServer<BufferedImage> getServer() {
-		var imageData = getImageData();
-		return imageData == null ? null : imageData.getServer();
+	public static byte[] snapshot(QuPathViewer viewer) throws IOException {
+		return getImageBytes(GuiTools.makeViewerSnapshot(viewer), "png");
 	}
 	
-	public static ServerWrapper getWrappedServer() {
-		var server = getServer();
-		return server == null ? null : wrap(server);
-	}
-	
-//	public PathObjectHierarchy getHierarchy() {
-//		var imageData = getImageData();
-//		return imageData == null ? null : imageData.getHierarchy();
-//	}
-	
-
 	public static String getDetectionMeasurementTable(ImageData<?> imageData) {
 		if (imageData == null)
 			return "";
@@ -191,7 +157,7 @@ public class QuPathEntryPoint extends QPEx {
 	
 
 	public static byte[] getTiffStack(ImageServer<BufferedImage> server, double downsample) throws IOException {
-		return getTiff(server, downsample, 0, 0, server.getWidth(), server.getHeight());
+		return getTiffStack(server, downsample, 0, 0, server.getWidth(), server.getHeight());
 	}
 
 	public static byte[] getTiffStack(ImageServer<BufferedImage> server, double downsample, int x, int y, int width, int height) throws IOException {
@@ -208,31 +174,47 @@ public class QuPathEntryPoint extends QPEx {
 		return toTiffBytes(imp);
 	}
 	
-	public static byte[] getTiff(ImageServer<BufferedImage> server, double downsample) throws IOException {
-		return getTiff(server, downsample, 0, 0, server.getWidth(), server.getHeight());
+	public static byte[] getImageBytes(ImageServer<BufferedImage> server, double downsample, String format) throws IOException {
+		return getImageBytes(server, downsample, 0, 0, server.getWidth(), server.getHeight(), format);
 	}
 
-	public static byte[] getTiff(ImageServer<BufferedImage> server, double downsample, int x, int y, int width, int height) throws IOException {
-		return getTiff(server, downsample, x, y, width, height, 0, 0);		
+	public static byte[] getImageBytes(ImageServer<BufferedImage> server, double downsample, int x, int y, int width, int height, String format) throws IOException {
+		return getImageBytes(server, downsample, x, y, width, height, 0, 0, format);		
 	}
 
-	public static byte[] getTiff(ImageServer<BufferedImage> server, double downsample, int x, int y, int width, int height, int z, int t) throws IOException {
-		return getTiff(server, RegionRequest.createInstance(server.getPath(), 
-							downsample, x, y, width, height, z, t));		
+	public static byte[] getImageBytes(ImageServer<BufferedImage> server, double downsample, int x, int y, int width, int height, int z, int t, String format) throws IOException {
+		var request = RegionRequest.createInstance(server.getPath(), 
+				downsample, x, y, width, height, z, t);
+		return getImageBytes(server, request, format);		
 	}
 
-	public static byte[] getTiff(ImageServer<BufferedImage> server, RegionRequest request) throws IOException {
-		var imp = IJTools.convertToImagePlus(server, request).getImage();
-		return toTiffBytes(imp);
+	public static byte[] getImageBytes(ImageServer<BufferedImage> server, RegionRequest request, String format) throws IOException {
+		var fmt = format.toLowerCase();
+		if (Set.of("imagej tiff", "imagej tif").contains(fmt)) {
+			var imp = IJTools.convertToImagePlus(server, request).getImage();
+			return toTiffBytes(imp);
+		}
+		
+		var img = server.readRegion(request);
+		return getImageBytes(img, format);
 	}
 	
+		
 	
-	private static byte[] toTiffBytes(BufferedImage img) {
+	public static byte[] getImageBytes(BufferedImage img, String format) throws IOException {
 		
-		if (BufferedImageTools.is8bitColorType(img.getType()))
-			img = BufferedImageTools.ensureBufferedImageType(img, BufferedImage.TYPE_INT_ARGB);
+		var fmt = format.toLowerCase();
+		if (Set.of("imagej tiff", "imagej tif").contains(fmt)) {
+			var imp = IJTools.convertToUncalibratedImagePlus("Image", img);
+			return toTiffBytes(imp);
+		}
 		
-		return toTiffBytes(IJTools.convertToUncalibratedImagePlus("Anything", img));
+		try (var stream = new ByteArrayOutputStream(Math.min(1024*1024*10, img.getWidth() * img.getHeight() + 1024))) {
+			ImageIO.write(img, format, stream);
+			var array = stream.toByteArray();
+			return array;
+		}
+		
 	}
 	
 	
@@ -241,66 +223,80 @@ public class QuPathEntryPoint extends QPEx {
 	}
 	
 	
-	public static void printMe(Object obj) {
-		System.out.println(Thread.currentThread());
-		System.err.println(obj + " -> " + obj.getClass());
-	}
-	
-	
-	public static ServerWrapper wrap(ImageServer<BufferedImage> server) {
-		return new ServerWrapper(server);
-	}
-	
-	
-	static class ServerWrapper {
-		
-		private ImageServer<BufferedImage> server;
-		
-		ServerWrapper(ImageServer<BufferedImage> server) {
-			this.server = server;
-		}
-		
-		public byte[] readImage(RegionRequest request) throws IOException {
-			return getTiff(server, request);
-		}
-		
-		public byte[] readImage(double downsample, int x, int y, int width, int height) throws IOException {
-			return readImage(RegionRequest.createInstance(server.getPath(), downsample, x, y, width, height));
-		}
-		
-		public byte[] readImage(double downsample, int x, int y, int width, int height, int z, int t) throws IOException {
-			return readImage(RegionRequest.createInstance(server.getPath(), downsample, x, y, width, height, z, t));
-		}
-		
-		public Iterator<?> getTiles() {
-			return getTiles(0);
-		}
-		
-		public Iterator<?> getTiles(int level) {
-			return new ArrayList<>(server.getTileRequestManager().getTileRequestsForLevel(level))
-				.stream()
-				.map(t -> {
-					try {
-						return readImage(t.getRegionRequest());
-					} catch (IOException e) {
-						return e;
-					}
-				})
-				.iterator();
-		}
-		
-		public ImageServer<BufferedImage> getServer() {
-			return server;
-		}
-		
-		public String getMetadataJson() {
-			return GsonTools.getInstance(true).toJson(server.getMetadata());
-		}
-		
-		public String getPixelCalibration() {
-			return GsonTools.getInstance(true).toJson(server.getPixelCalibration());
-		}
-		
-	}
+//	public static ImageBytesServer wrap(ImageServer<BufferedImage> server) {
+//		return new ImageBytesServer(server);
+//	}
+//	
+//	
+//	static class ImageBytesServer extends AbstractImageServer<byte[]> {
+//
+//		private String format;
+//		private ImageServer<BufferedImage> baseServer;
+//		
+//		protected ImageBytesServer(ImageServer<BufferedImage> baseServer) {
+//			super(byte[].class);
+//			this.baseServer = baseServer;
+//			if (this.baseServer.isRGB())
+//				format = "png";
+//			else
+//				format = "imagej tiff";
+//		}
+//
+//		@Override
+//		public Collection<URI> getURIs() {
+//			return baseServer.getURIs();
+//		}
+//
+//		@Override
+//		public String getServerType() {
+//			return "TIFF bytes server (" + baseServer.getServerType() + ")";
+//		}
+//
+//		@Override
+//		public ImageServerMetadata getOriginalMetadata() {
+//			return baseServer.getOriginalMetadata();
+//		}
+//
+//		@Override
+//		protected ServerBuilder<byte[]> createServerBuilder() {
+//			throw new UnsupportedOperationException("Unable to create a ServerBuilder for TiffBytesServer");
+//		}
+//
+//		@Override
+//		protected String createID() {
+//			return UUID.randomUUID().toString();
+//		}
+//		
+//		@Override
+//		public byte[] readRegion(double downsample, int x, int y, int width, int height, int z, int t) throws IOException {
+//			return getImageBytes(baseServer, downsample, x, y, width, height, z, t, format);
+//		}
+//		
+//		public Iterator<?> getTiles() {
+//			return getTiles(0);
+//		}
+//		
+//		public Iterator<?> getTiles(int level) {
+//			return new ArrayList<>(baseServer.getTileRequestManager().getTileRequestsForLevel(level))
+//				.stream()
+//				.map(t -> {
+//					try {
+//						return readRegion(t.getRegionRequest());
+//					} catch (IOException e) {
+//						return e;
+//					}
+//				})
+//				.iterator();
+//		}
+//		
+//		public String getMetadataJson() {
+//			return GsonTools.getInstance(true).toJson(baseServer.getMetadata());
+//		}
+//		
+//		public String getPixelCalibrationJson() {
+//			return GsonTools.getInstance(true).toJson(baseServer.getPixelCalibration());
+//		}
+//		
+//	}
 	
 }
