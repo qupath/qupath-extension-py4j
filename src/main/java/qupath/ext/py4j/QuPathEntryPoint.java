@@ -41,6 +41,7 @@ import com.google.gson.stream.JsonToken;
 import com.google.gson.stream.JsonWriter;
 import ij.ImagePlus;
 import ij.io.FileSaver;
+import javafx.application.Platform;
 import qupath.imagej.tools.IJTools;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
@@ -72,11 +73,32 @@ public class QuPathEntryPoint extends QPEx {
 	}
 	
 	public static byte[] snapshot(QuPathGUI qupath) throws IOException {
+		// If we return the snapshot too quickly, we may not see the result of recent actions
+		try {
+			Platform.requestNextPulse();
+			Thread.sleep(50L);
+		} catch (InterruptedException e) {
+			throw new RuntimeException(e);
+		}
 		return getImageBytes(GuiTools.makeSnapshot(qupath, SnapshotType.MAIN_SCENE), "png");
 	}
 
 	public static byte[] snapshot(QuPathViewer viewer) throws IOException {
+		try {
+			Platform.requestNextPulse();
+			Thread.sleep(50L);
+		} catch (InterruptedException e) {
+			throw new RuntimeException(e);
+		}
 		return getImageBytes(GuiTools.makeViewerSnapshot(viewer), "png");
+	}
+
+	public static String snapshotBase64(QuPathGUI qupath) throws IOException {
+		return base64Encode(snapshot(qupath));
+	}
+
+	public static String snapshotBase64(QuPathViewer viewer) throws IOException {
+		return base64Encode(snapshot(viewer));
 	}
 	
 	public static String getDetectionMeasurementTable(ImageData<?> imageData) {
