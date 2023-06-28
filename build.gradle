@@ -36,6 +36,8 @@ dependencies {
 
     shadow "org.slf4j:slf4j-api:2.0.0"
 
+    shadow libs.guava
+
     implementation 'net.sf.py4j:py4j:0.10.9.7'
 
     testImplementation "io.github.qupath:qupath-gui-fx:${qupathVersion}"

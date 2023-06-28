@@ -20,16 +20,25 @@ package qupath.ext.py4j;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import javax.imageio.ImageIO;
 
+import com.google.common.collect.Lists;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.TypeAdapter;
 import com.google.gson.reflect.TypeToken;
 
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonToken;
+import com.google.gson.stream.JsonWriter;
 import ij.ImagePlus;
 import ij.io.FileSaver;
 import qupath.imagej.tools.IJTools;
@@ -46,6 +55,7 @@ import qupath.lib.images.servers.ImageServer;
 import qupath.lib.io.FeatureCollection;
 import qupath.lib.io.GsonTools;
 import qupath.lib.objects.PathObject;
+import qupath.lib.regions.ImagePlane;
 import qupath.lib.regions.RegionRequest;
 import qupath.lib.roi.interfaces.ROI;
 
@@ -109,20 +119,46 @@ public class QuPathEntryPoint extends QPEx {
 
 	public static List<PathObject> toPathObjects(String geoJson) {
 		var gson = GsonTools.getInstance();
-		var jsonObject = gson.fromJson(geoJson, JsonElement.class);
-		if (jsonObject.isJsonObject() && "FeatureCollection".equals(jsonObject.getAsJsonObject().get("type").getAsString()))
-			jsonObject = jsonObject.getAsJsonObject().get("features");
-		if (jsonObject.isJsonArray())
-			return gson.fromJson(jsonObject,
-				new TypeToken<List<PathObject>>() {}.getType()
-				);
-		else if (jsonObject.getAsJsonObject().size() == 0) {
-			return Collections.emptyList();
-		} else
-			return Collections.singletonList(
-					gson.fromJson(jsonObject, PathObject.class)
-					);
+		return toPathObjects(gson.fromJson(geoJson, JsonElement.class));
 	}
+
+	public static List<PathObject> toPathObjects(JsonElement jsonElement) {
+		var gson = GsonTools.getDefaultBuilder()
+				.registerTypeAdapter(ImagePlane.class, Py4JImagePlaneTypeAdapter.INSTANCE)
+				.create();
+		if (jsonElement.isJsonArray()) {
+			return toStream(jsonElement.getAsJsonArray().asList(), 10)
+					.flatMap(e -> toPathObjects(e).stream())
+					.collect(Collectors.toList());
+		}
+		if (jsonElement.isJsonObject()) {
+			JsonObject jsonObject = jsonElement.getAsJsonObject();
+			if (jsonObject.size() == 0)
+				return Collections.emptyList();
+			if (jsonObject.has("features")) {
+				return toPathObjects(jsonObject.get("features"));
+			} else {
+				stripNulls(jsonObject);
+				return Collections.singletonList(gson.fromJson(jsonObject, PathObject.class));
+			}
+		} else
+			return Collections.emptyList();
+	}
+
+	/**
+	 * QuPath's v0.4.3 GeoJSON deserialization failed on some null entries, so make sure these are removed
+	 * @param jsonObject
+	 */
+	private static void stripNulls(JsonObject jsonObject) {
+		for (String key : new ArrayList<>(jsonObject.keySet())) {
+			JsonElement member = jsonObject.get(key);
+			if (member == null || member.isJsonNull())
+				jsonObject.remove(key);
+			else if (member.isJsonObject())
+				stripNulls(member.getAsJsonObject());
+		}
+	}
+
 	
 	public static List<ROI> toROIs(String geoJson) {
 		return GsonTools.getInstance().fromJson(geoJson, 
@@ -133,7 +169,7 @@ public class QuPathEntryPoint extends QPEx {
 	/**
 	 * Convert a collection of PathObjects to a GeoJSON FeatureCollection.
 	 * If there is a chance the resulting string will be too long, prefer instead
-	 * {@link #toGeoJson(Collection)} to return a list of one string per PathObject instead.
+	 * {@link #toFeatureCollections(Collection, int)} to partition objects into separate feature collections.
 	 * @param pathObjects
 	 * @return
 	 */
@@ -141,13 +177,47 @@ public class QuPathEntryPoint extends QPEx {
 		var collection = FeatureCollection.wrap(pathObjects);
 		return GsonTools.getInstance().toJson(collection);
 	}
-	
-	public static List<String> toGeoJson(Collection<? extends PathObject> pathObjects) {
-		var gson = GsonTools.getInstance();
-		return pathObjects.stream().map(p -> gson.toJson(p)).collect(Collectors.toList());
+
+	/**
+	 * Create a GeoJSON FeatureCollection from a collection of PathObjects, partitioning into separate collections.
+	 * This can be useful for performance reasons, and also to avoid the character limit for strings in Java and Python.
+	 * @param pathObjects
+	 * @param chunkSize
+	 * @return
+	 */
+	public static List<String> toFeatureCollections(Collection<? extends PathObject> pathObjects, int chunkSize) {
+		return toStream(Lists.partition(new ArrayList<>(pathObjects), chunkSize), 4)
+				.map(QuPathEntryPoint::toFeatureCollection).collect(Collectors.toList());
 	}
 
-	public static String toGeoJson(PathObject pathObject) {
+	public static List<String> toGeoJsonFeatureList(Collection<? extends PathObject> pathObjects) {
+		var gson = GsonTools.getInstance();
+		return toStream(pathObjects, 100).map(p -> gson.toJson(p)).collect(Collectors.toList());
+	}
+
+	public static List<String> getObjectIds(Collection<? extends PathObject> pathObjects) {
+		return pathObjects.stream().map(p -> p.getID().toString()).collect(Collectors.toList());
+	}
+
+	public static List<String> getMeasurementNames(Collection<? extends PathObject> pathObjects) {
+		return pathObjects.stream()
+				.flatMap(p -> p.getMeasurementList().getMeasurementNames().stream())
+				.distinct()
+				.collect(Collectors.toList());
+	}
+
+	public static List<Double> getMeasurements(Collection<? extends PathObject> pathObjects, String name) {
+		return pathObjects.stream().map(p -> p.getMeasurements().getOrDefault(name, null)).collect(Collectors.toList());
+	}
+
+	private static <T> Stream<T> toStream(Collection<T> collection, int minSizeForParallelism) {
+		if (collection.size() >= minSizeForParallelism)
+			return collection.parallelStream();
+		else
+			return collection.stream();
+	}
+
+	public static String toGeoJsonFeature(PathObject pathObject) {
 		return GsonTools.getInstance().toJson(pathObject);
 	}
 	
@@ -173,6 +243,22 @@ public class QuPathEntryPoint extends QPEx {
 		var imp = IJTools.extractHyperstack(server, request);
 		return toTiffBytes(imp);
 	}
+
+	public static String getTiffStackBase64(ImageServer<BufferedImage> server, double downsample) throws IOException {
+		return base64Encode(getTiffStack(server, downsample));
+	}
+
+	public static String getTiffStackBase64(ImageServer<BufferedImage> server, double downsample, int x, int y, int width, int height) throws IOException {
+		return base64Encode(getTiffStack(server, downsample, x, y, width, height));
+	}
+
+	public static String getTiffStackBase64(ImageServer<BufferedImage> server, double downsample, int x, int y, int width, int height, int z, int t) throws IOException {
+		return base64Encode(getTiffStack(server, downsample, x, y, width, height, z, t));
+	}
+
+	public static String getTiffStackBase64(ImageServer<BufferedImage> server, RegionRequest request) throws IOException {
+		return base64Encode(getTiffStack(server, request));
+	}
 	
 	public static byte[] getImageBytes(ImageServer<BufferedImage> server, double downsample, String format) throws IOException {
 		return getImageBytes(server, downsample, 0, 0, server.getWidth(), server.getHeight(), format);
@@ -185,20 +271,43 @@ public class QuPathEntryPoint extends QPEx {
 	public static byte[] getImageBytes(ImageServer<BufferedImage> server, double downsample, int x, int y, int width, int height, int z, int t, String format) throws IOException {
 		var request = RegionRequest.createInstance(server.getPath(), 
 				downsample, x, y, width, height, z, t);
-		return getImageBytes(server, request, format);		
+		byte[] result = getImageBytes(server, request, format);
+		return result;
+	}
+
+	public static String getImageBase64(ImageServer<BufferedImage> server, double downsample, String format) throws IOException {
+		return base64Encode(getImageBytes(server, downsample, format));
+	}
+
+	public static String getImageBase64(ImageServer<BufferedImage> server, double downsample, int x, int y, int width, int height, String format) throws IOException {
+		return base64Encode(getImageBytes(server, downsample, x, y, width, height, format));
+	}
+
+	public static String getImageBase64(ImageServer<BufferedImage> server, double downsample, int x, int y, int width, int height, int z, int t, String format) throws IOException {
+		return base64Encode(getImageBytes(server, downsample, x, y, width, height, z, t, format));
+	}
+
+	public static String getImageBase64(ImageServer<BufferedImage> server, RegionRequest request, String format) throws IOException {
+		return base64Encode(getImageBytes(server, request, format));
 	}
 
 	public static byte[] getImageBytes(ImageServer<BufferedImage> server, RegionRequest request, String format) throws IOException {
-		var fmt = format.toLowerCase();
-		if (Set.of("imagej tiff", "imagej tif").contains(fmt)) {
+		if (isImageJFormat(format)) {
 			var imp = IJTools.convertToImagePlus(server, request).getImage();
 			return toTiffBytes(imp);
 		}
-		
 		var img = server.readRegion(request);
 		return getImageBytes(img, format);
 	}
-	
+
+	private static String base64Encode(byte[] bytes) {
+		return Base64.getEncoder().encodeToString(bytes);
+	}
+
+	private static boolean isImageJFormat(String format) {
+		var fmt = format.toLowerCase();
+		return Set.of("imagej tiff", "imagej tif").contains(fmt);
+	}
 		
 	
 	public static byte[] getImageBytes(BufferedImage img, String format) throws IOException {
@@ -298,5 +407,54 @@ public class QuPathEntryPoint extends QPEx {
 //		}
 //		
 //	}
-	
+
+
+	static class Py4JImagePlaneTypeAdapter extends TypeAdapter<ImagePlane> {
+
+		static Py4JImagePlaneTypeAdapter INSTANCE = new Py4JImagePlaneTypeAdapter();
+
+		@Override
+		public void write(JsonWriter out, ImagePlane plane) throws IOException {
+			out.beginObject();
+			out.name("c");
+			out.value(plane.getC());
+			out.name("z");
+			out.value(plane.getZ());
+			out.name("t");
+			out.value(plane.getT());
+			out.endObject();
+		}
+
+		@Override
+		public ImagePlane read(JsonReader in) throws IOException {
+			boolean isObject = in.peek() == JsonToken.BEGIN_OBJECT;
+
+			if (isObject)
+				in.beginObject();
+
+			ImagePlane plane = ImagePlane.getDefaultPlane();
+			int c = plane.getC();
+			int z = plane.getZ();
+			int t = plane.getT();
+
+			while (in.hasNext()) {
+				switch (in.nextName()) {
+					case "c":
+						c = in.nextInt();
+						break;
+					case "z":
+						z = in.nextInt();
+						break;
+					case "t":
+						t = in.nextInt();
+						break;
+				}
+			}
+			if (isObject)
+				in.endObject();
+			return ImagePlane.getPlaneWithChannel(c, z, t);
+		}
+
+	}
+
 }
