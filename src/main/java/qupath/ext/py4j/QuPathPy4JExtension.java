@@ -169,12 +169,11 @@ public class QuPathPy4JExtension implements QuPathExtension {
 			return false;
 		}
 		
-		var title = "Py4J Gateway";
-
 		URL url = getClass().getResource("gateway_prompt.fxml");
 		if (url == null) {
 			throw new IOException("Can't find URL for Gateway dialog");
 		}
+
 		var loader = new FXMLLoader(url);
 		loader.setResources(ResourceBundle.getBundle(resourceManager.getDefaultBundleName()));
 		GridPane pane = loader.load();
@@ -187,7 +186,7 @@ public class QuPathPy4JExtension implements QuPathExtension {
 		controller.setToken(token);
 
 		var result = Dialogs.builder()
-				.title(title)
+				.title(getTitle())
 				.content(pane)
 				.buttons(ButtonType.OK, ButtonType.CANCEL)
 				.showAndWait()
@@ -204,7 +203,7 @@ public class QuPathPy4JExtension implements QuPathExtension {
 			try {
 				port = Integer.parseInt(portText);
 			} catch (NumberFormatException e) {
-				Dialogs.showErrorMessage(title, resourceManager.getString("py4j.error.invalid_port"));
+				Dialogs.showErrorMessage(getTitle(), resourceManager.getString("py4j.error.invalid_port"));
 				return false;
 			}
 		} else {

@@ -140,16 +140,16 @@ public class QuPathEntryPoint extends QPEx {
 		return GsonTools.getInstance().fromJson(geoJson, ROI.class);
 	}
 
-	public static List<PathObject> toPathObjects(String geoJson) {
+	public static List<PathObject> toPathObjectList(String geoJson) {
 		var gson = GsonTools.getInstance();
-		return toPathObjects(gson.fromJson(geoJson, JsonElement.class));
+		return toPathObjectList(gson.fromJson(geoJson, JsonElement.class));
 	}
 
-	public static List<PathObject> toPathObjects(JsonElement jsonElement) {
+	public static List<PathObject> toPathObjectList(JsonElement jsonElement) {
 		var gson = GsonTools.getInstance();
 		if (jsonElement.isJsonArray()) {
 			return toStream(jsonElement.getAsJsonArray().asList(), 10)
-					.flatMap(e -> toPathObjects(e).stream())
+					.flatMap(e -> toPathObjectList(e).stream())
 					.collect(Collectors.toList());
 		}
 		if (jsonElement.isJsonObject()) {
@@ -157,7 +157,7 @@ public class QuPathEntryPoint extends QPEx {
 			if (jsonObject.size() == 0)
 				return Collections.emptyList();
 			if (jsonObject.has("features")) {
-				return toPathObjects(jsonObject.get("features"));
+				return toPathObjectList(jsonObject.get("features"));
 			} else {
 				stripNulls(jsonObject);
 				return Collections.singletonList(gson.fromJson(jsonObject, PathObject.class));
@@ -190,7 +190,7 @@ public class QuPathEntryPoint extends QPEx {
 	/**
 	 * Convert a collection of PathObjects to a GeoJSON FeatureCollection.
 	 * If there is a chance the resulting string will be too long, prefer instead
-	 * {@link #toFeatureCollections(Collection, int)} to partition objects into separate feature collections.
+	 * {@link #toFeatureCollectionList(Collection, int)} to partition objects into separate feature collections.
 	 * @param pathObjects
 	 * @return
 	 */
@@ -206,7 +206,7 @@ public class QuPathEntryPoint extends QPEx {
 	 * @param chunkSize
 	 * @return
 	 */
-	public static List<String> toFeatureCollections(Collection<? extends PathObject> pathObjects, int chunkSize) {
+	public static List<String> toFeatureCollectionList(Collection<? extends PathObject> pathObjects, int chunkSize) {
 		return toStream(Lists.partition(new ArrayList<>(pathObjects), chunkSize), 4)
 				.map(QuPathEntryPoint::toFeatureCollection).collect(Collectors.toList());
 	}
