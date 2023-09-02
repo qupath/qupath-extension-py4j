@@ -16,45 +16,37 @@
 
 package qupath.ext.py4j;
 
-import java.util.Map;
-import java.util.UUID;
-
+import javafx.beans.binding.Bindings;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.IntegerProperty;
+import javafx.beans.value.ObservableBooleanValue;
+import javafx.css.PseudoClass;
+import javafx.event.ActionEvent;
+import javafx.fxml.FXMLLoader;
+import javafx.scene.Node;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.ContentDisplay;
+import javafx.scene.layout.GridPane;
 import org.controlsfx.control.action.Action;
 import org.kordamp.ikonli.javafx.StackedFontIcon;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javafx.beans.binding.Bindings;
-import javafx.beans.property.BooleanProperty;
-import javafx.beans.property.ObjectProperty;
-import javafx.beans.property.ReadOnlyBooleanProperty;
-import javafx.beans.property.SimpleBooleanProperty;
-import javafx.beans.property.SimpleObjectProperty;
-import javafx.beans.value.ObservableBooleanValue;
-import javafx.beans.value.ObservableValue;
-import javafx.css.PseudoClass;
-import javafx.geometry.Pos;
-import javafx.scene.Node;
-import javafx.scene.control.Button;
-import javafx.scene.control.ButtonType;
-import javafx.scene.control.ContentDisplay;
-import javafx.scene.control.Label;
-import javafx.scene.control.TextField;
-import javafx.scene.control.Tooltip;
-import javafx.scene.input.Clipboard;
-import javafx.scene.input.DataFormat;
-import javafx.scene.layout.GridPane;
-import javafx.scene.text.TextAlignment;
 import py4j.GatewayServer;
-import py4j.GatewayServerListener;
-import py4j.Py4JServerConnection;
 import qupath.fx.dialogs.Dialogs;
-import qupath.fx.utils.GridPaneUtils;
+import qupath.fx.localization.LocalizedResourceManager;
+import qupath.fx.prefs.annotations.BooleanPref;
+import qupath.fx.prefs.annotations.PrefCategory;
+import qupath.fx.prefs.controlsfx.PropertySheetUtils;
 import qupath.lib.common.Version;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.actions.ActionTools;
 import qupath.lib.gui.extensions.QuPathExtension;
 import qupath.lib.gui.prefs.PathPrefs;
+
+import java.io.IOException;
+import java.net.URL;
+import java.util.Objects;
+import java.util.ResourceBundle;
 
 
 /**
@@ -62,144 +54,138 @@ import qupath.lib.gui.prefs.PathPrefs;
  * 
  * @author Pete Bankhead
  */
+@PrefCategory("py4j.title")
 public class QuPathPy4JExtension implements QuPathExtension {
 	
 	private final static Logger logger = LoggerFactory.getLogger(QuPathPy4JExtension.class);
 
-	private boolean isInstalled = false;
-	
-	private BooleanProperty enablePy4J = PathPrefs.createPersistentPreference("enablePy4J", true);
-	
-	private Py4JCommand command = new Py4JCommand();
-	
+	@BooleanPref("py4j.enable")
+	public BooleanProperty enablePy4J = PathPrefs.createPersistentPreference("enablePy4J", true);
+
+	private GatewayManager gatewayManager = new GatewayManager();
+
+	private LocalizedResourceManager resourceManager = LocalizedResourceManager.createInstance("qupath.ext.py4j.strings");
+
+	private IntegerProperty portProperty = PathPrefs.createPersistentPreference("py4j.port", GatewayServer.DEFAULT_PORT);
+
+	private String token = "";
+
 	@Override
 	public void installExtension(QuPathGUI qupath) {
-		if (isInstalled) {
-			logger.debug("{} is already installed", getName());
-			return;
-		}
-				
-		isInstalled = true;
-				
-		qupath.getPreferencePane().addPropertyPreference(
-				enablePy4J,
-				Boolean.class,
-				"Enable Py4J",
-				"Py4J",
-				"Enable Py4J through the UI to accept connections - "
-				+ "this enables QuPath to communicate with Python.\n"
-				+ "See www.py4j.org for more info.");
-				
-		
+
+		addAnnotatedPreferences(qupath);
+
 		var action = createGatewayAction();
-		
+
 		var mi = ActionTools.createMenuItem(action);
 		mi.graphicProperty().unbind();
-		mi.setGraphic(createGatewayIcon(command.gatewayRunningProperty()));
+		mi.setGraphic(createGatewayIcon(gatewayManager.gatewayRunningProperty()));
 		mi.visibleProperty().bind(enablePy4J);
 		
 		var btn = ActionTools.createButtonWithGraphicOnly(action);
 		btn.textProperty().unbind();
 		btn.graphicProperty().unbind();
 		btn.getStyleClass().add("toggle-button");
-		command.gatewayRunningProperty().addListener((v, o, n) -> {
+
+		gatewayManager.gatewayRunningProperty().addListener((v, o, n) -> {
 			btn.pseudoClassStateChanged(PseudoClass.getPseudoClass("selected"), n);
 			if (n)
-				Dialogs.showInfoNotification("Py4J", "Py4J Gateway started");
+				Dialogs.showInfoNotification(getTitle(), resourceManager.getString("py4j.notifications.gateway_started"));
 			else
-				Dialogs.showInfoNotification("Py4J", "Py4J Gateway stopped");
+				Dialogs.showInfoNotification(getTitle(), resourceManager.getString("py4j.notifications.gateway_stopped"));
 		});
 		btn.visibleProperty().bind(enablePy4J);
 		
-		btn.setGraphic(createGatewayIcon(command.gatewayRunningProperty()));
+		btn.setGraphic(createGatewayIcon(gatewayManager.gatewayRunningProperty()));
 		btn.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
 		
 		qupath.getToolBar().getItems().add(btn);
-		
+
 		var menu = qupath.getMenu("Extensions>Py4J", true);
 		menu.visibleProperty().bind(enablePy4J);
 		menu.getItems().add(mi);
 	}
-	
+
+	@Override
+	public String getName() {
+		return resourceManager.getString("py4j.extension.name");
+	}
+
+	@Override
+	public String getDescription() {
+		return resourceManager.getString("py4j.extension.description");
+	}
+
+	// TODO: Update when version is stabilized
+	@Override
+	public Version getQuPathVersion() {
+		return Version.parse("v0.5.0-SNAPSHOT");
+	}
+
+	private void addAnnotatedPreferences(QuPathGUI qupath) {
+		// Add any annotated preferences from this class
+		qupath.getPreferencePane().getPropertySheet().getItems().addAll(
+				PropertySheetUtils.parseAnnotatedItemsWithResources(LocalizedResourceManager.createInstance("qupath.ext.py4j.strings"), this)
+		);
+	}
+
+
+	private String getTitle() {
+		return resourceManager.getString("py4j.title");
+	}
+
 	
 	private Action createGatewayAction() {
-		var action = new Action("Py4J", e -> {
-			if (command.isGatewayRunning())
-				command.stopGateway();
-			else
-				promptToStartGateway();
-		});
+		var action = new Action(getTitle(), this::handleGatewayEvent);
 		action.textProperty().bind(Bindings.createStringBinding(() -> {
 			if (action.isSelected())
-				return "Stop Py4J Gateway";
+				return resourceManager.getString("py4j.gateway.stop");
 			else
-				return "Start Py4J Gateway";
+				return resourceManager.getString("py4j.gateway.start");
 		}, action.selectedProperty()));
-		
-		action.setLongText("Start a Py4J Gateway to communicate between QuPath and Python");		
+
+		action.longTextProperty().bind(resourceManager.createProperty("py4j.gateway.action.description"));
 		return action;
 	}
+
+
+	private void handleGatewayEvent(ActionEvent e) {
+		if (gatewayManager.isGatewayRunning())
+			gatewayManager.stopGateway();
+		else {
+			try {
+				promptToStartGateway();
+			} catch (IOException e1) {
+				Dialogs.showErrorMessage(getTitle(), e1);
+			}
+		}
+	}
+
 	
-	
-	private Integer port = GatewayServer.DEFAULT_PORT;
-	private String token = "";
-	
-	
-	private boolean promptToStartGateway() {
+	private boolean promptToStartGateway() throws IOException {
 		
-		if (command.isGatewayRunning()) {
+		if (gatewayManager.isGatewayRunning()) {
 			logger.warn("Can't start new GatewayServer - please shut down the existing server first");
 			return false;
 		}
 		
 		var title = "Py4J Gateway";
-		
-		var pane = new GridPane();
-		pane.setHgap(5);
-		pane.setVgap(5);
-		
-		var labelPort = new Label("Port");
-		var tfPort = new TextField();
-		tfPort.setPromptText("Default port (" + port + ")");
-		
-		int row = 0;
-		
-		var labelInstructions = new Label("Create a Py4J Gateway so Python programs can \n"
-				+ "access QuPath through a local network socket.\n"
-				+ "Check out py4j.org for more details & security info.\n ");
-		labelInstructions.setTextAlignment(TextAlignment.CENTER);
-		labelInstructions.setAlignment(Pos.CENTER);
-		GridPaneUtils.setToExpandGridPaneWidth(labelInstructions);
 
-		GridPaneUtils.addGridRow(pane, row++, 0, null, labelInstructions, labelInstructions);
+		URL url = getClass().getResource("gateway_prompt.fxml");
+		if (url == null) {
+			throw new IOException("Can't find URL for Gateway dialog");
+		}
+		var loader = new FXMLLoader(url);
+		loader.setResources(ResourceBundle.getBundle(resourceManager.getDefaultBundleName()));
+		GridPane pane = loader.load();
+		GatewayPrompt controller = loader.getController();
+		Integer port = portProperty.getValue();
+		if (Objects.equals(GatewayServer.DEFAULT_PORT, port))
+			controller.setPort(null);
+		else
+			controller.setPort(Integer.toString(port));
+		controller.setToken(token);
 
-
-		GridPaneUtils.addGridRow(pane, row++, 0, "Port number (integer), or leave blank to use the default Py4J port",
-				labelPort, tfPort);
-				
-		var labelAuthToken = new Label("Token");
-		var tfAuthToken = new TextField(token);
-		tfAuthToken.setPromptText("Authentication token (optional)");
-		tfAuthToken.setPrefColumnCount(24);
-		var btnRandomToken = new Button("Random");
-		btnRandomToken.setOnAction(e -> tfAuthToken.setText(UUID.randomUUID().toString()));
-		btnRandomToken.setTooltip(new Tooltip("Generate a UUID to use as an authentication token"));
-		
-		var btnCopyToken = new Button("Copy");
-		btnCopyToken.disableProperty().bind(tfAuthToken.textProperty().isEmpty());
-		btnCopyToken.setOnAction(e -> {
-			Clipboard.getSystemClipboard().setContent(Map.of(DataFormat.PLAIN_TEXT, tfAuthToken.getText()));
-			Dialogs.showInfoNotification(title, "Token copied to clipboard!");
-		});
-		btnCopyToken.setTooltip(new Tooltip("Copy authentication token to clipboard (to use in Python)"));
-
-		GridPaneUtils.addGridRow(pane, row++, 0, "Authentication token - if provided, this needs to be entered on the Python side",
-				labelAuthToken, tfAuthToken);
-		var paneButtons = GridPaneUtils.createColumnGrid(btnRandomToken, btnCopyToken);
-		paneButtons.setHgap(5);
-		GridPaneUtils.setMaxWidth(Double.MAX_VALUE, btnRandomToken, btnCopyToken);
-		GridPaneUtils.addGridRow(pane, row++, 0, null, null, paneButtons, paneButtons);
-		
 		var result = Dialogs.builder()
 				.title(title)
 				.content(pane)
@@ -213,12 +199,12 @@ public class QuPathPy4JExtension implements QuPathExtension {
 		var builder = new GatewayServer.GatewayServerBuilder()
 				.entryPoint(new QuPathEntryPoint());
 		
-		var portText = tfPort.getText();
+		var portText = controller.getPort();
 		if (portText != null && !portText.isBlank()) {
 			try {
 				port = Integer.parseInt(portText);
 			} catch (NumberFormatException e) {
-				Dialogs.showErrorMessage(title, "Unable to parse port number - must be a valid integer");
+				Dialogs.showErrorMessage(title, resourceManager.getString("py4j.error.invalid_port"));
 				return false;
 			}
 		} else {
@@ -226,10 +212,12 @@ public class QuPathPy4JExtension implements QuPathExtension {
 			port = GatewayServer.DEFAULT_PORT;
 		}
 		
-		if (port != null)
+		if (port != null) {
 			builder.javaPort(port);
-		
-		var authToken = tfAuthToken.getText();
+		}
+		portProperty.set(port);
+
+		var authToken = controller.getToken();
 		if (authToken != null && !authToken.isEmpty()) {
 			if (authToken.isBlank())
 				logger.warn("Authentication token is blank (but not empty)");
@@ -240,13 +228,13 @@ public class QuPathPy4JExtension implements QuPathExtension {
 		token = authToken;
 
 		var server = builder.build();
-		command.gatewayServer.set(server);
+		gatewayManager.gatewayServerProperty().set(server);
 		
 		return true;
 	}
 	
 	
-	private Node createGatewayIcon(ObservableBooleanValue gatewayOn) {
+	private static Node createGatewayIcon(ObservableBooleanValue gatewayOn) {
 		var icon = new StackedFontIcon();
 		icon.setIconCodeLiterals("ion4-logo-python");
 		icon.setStyle("-fx-icon-color: -fx-text-fill;");
@@ -263,126 +251,6 @@ public class QuPathPy4JExtension implements QuPathExtension {
 			icon.setStyle("-fx-icon-color: -fx-text-fill;");
 		return icon;
 	}
-	
-	
 
-	@Override
-	public String getName() {
-		return "QuPath Py4J extension";
-	}
-
-	@Override
-	public String getDescription() {
-		return "Connect QuPath to Python via Py4J";
-	}
-	
-	// TODO: Update when version is stabilized
-	@Override
-	public Version getQuPathVersion() {
-		return Version.parse("v0.5.0-SNAPSHOT");
-	}
-	
-	
-	
-	
-	private static class Py4JCommand {
-		
-		private static final Logger logger = LoggerFactory.getLogger(Py4JCommand.class);
-		
-		private BooleanProperty gatewayRunning = new SimpleBooleanProperty(false);
-		
-		private ObjectProperty<GatewayServer> gatewayServer = new SimpleObjectProperty<>();;
-		
-		private Py4JListener listener;
-		
-		private Py4JCommand() {
-			gatewayServer.addListener(this::gatewayChanged);
-		}
-		
-		private void gatewayChanged(ObservableValue<? extends GatewayServer> observable, GatewayServer oldValue,
-				GatewayServer newValue) {
-			if (oldValue != null) {
-				if (oldValue.getGateway().isStarted())
-					oldValue.shutdown();
-				oldValue.removeListener(listener);
-			}
-			if (newValue != null) {
-				if (listener == null)
-					listener = new Py4JListener();
-				newValue.addListener(listener);
-				if (!newValue.getGateway().isStarted()) {
-					newValue.start();				
-				}
-			}
-		}
-
-		
-		public void stopGateway() {
-			var server = gatewayServer.get();
-			if (server != null) {
-				server.shutdown();
-				server.removeListener(listener);
-				gatewayServer.set(null);
-			}
-		}
-		
-		
-		public boolean isGatewayRunning() {
-			return gatewayRunning.get();
-		}
-		
-		public ReadOnlyBooleanProperty gatewayRunningProperty() {
-			return ReadOnlyBooleanProperty.readOnlyBooleanProperty(gatewayRunning);
-		}
-		
-		
-		private class Py4JListener implements GatewayServerListener {
-
-			@Override
-			public void connectionError(Exception e) {
-				logger.error(e.getLocalizedMessage(), e);
-			}
-	
-			@Override
-			public void connectionStarted(Py4JServerConnection gatewayConnection) {
-				logger.info("Gateway connection started");
-			}
-	
-			@Override
-			public void connectionStopped(Py4JServerConnection gatewayConnection) {
-				logger.info("Gateway connection stopped");
-			}
-	
-			@Override
-			public void serverError(Exception e) {
-				logger.error(e.getLocalizedMessage(), e);
-			}
-	
-			@Override
-			public void serverPostShutdown() {
-				if (gatewayRunning.get()) {
-					logger.info("Py4J gateway shutdown");
-					gatewayRunning.set(false);
-				}
-			}
-	
-			@Override
-			public void serverPreShutdown() {}
-	
-			@Override
-			public void serverStarted() {
-				logger.info("Py4J gateway started");
-				gatewayRunning.set(true);
-			}
-	
-			@Override
-			public void serverStopped() {
-				logger.debug("Py4J gateway stopped");
-			}
-			
-		}
-
-	}
-	
 
 }
