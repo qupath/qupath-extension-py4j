@@ -48,13 +48,13 @@ import javafx.scene.text.TextAlignment;
 import py4j.GatewayServer;
 import py4j.GatewayServerListener;
 import py4j.Py4JServerConnection;
+import qupath.fx.dialogs.Dialogs;
+import qupath.fx.utils.GridPaneUtils;
 import qupath.lib.common.Version;
-import qupath.lib.gui.ActionTools;
 import qupath.lib.gui.QuPathGUI;
-import qupath.lib.gui.dialogs.Dialogs;
+import qupath.lib.gui.actions.ActionTools;
 import qupath.lib.gui.extensions.QuPathExtension;
 import qupath.lib.gui.prefs.PathPrefs;
-import qupath.lib.gui.tools.PaneTools;
 
 
 /**
@@ -98,7 +98,7 @@ public class QuPathPy4JExtension implements QuPathExtension {
 		mi.setGraphic(createGatewayIcon(command.gatewayRunningProperty()));
 		mi.visibleProperty().bind(enablePy4J);
 		
-		var btn = ActionTools.createButton(action, true);
+		var btn = ActionTools.createButtonWithGraphicOnly(action);
 		btn.textProperty().unbind();
 		btn.graphicProperty().unbind();
 		btn.getStyleClass().add("toggle-button");
@@ -169,12 +169,12 @@ public class QuPathPy4JExtension implements QuPathExtension {
 				+ "Check out py4j.org for more details & security info.\n ");
 		labelInstructions.setTextAlignment(TextAlignment.CENTER);
 		labelInstructions.setAlignment(Pos.CENTER);
-		PaneTools.setToExpandGridPaneWidth(labelInstructions);
-		
-		PaneTools.addGridRow(pane, row++, 0, null, labelInstructions, labelInstructions);
+		GridPaneUtils.setToExpandGridPaneWidth(labelInstructions);
 
-		
-		PaneTools.addGridRow(pane, row++, 0, "Port number (integer), or leave blank to use the default Py4J port",
+		GridPaneUtils.addGridRow(pane, row++, 0, null, labelInstructions, labelInstructions);
+
+
+		GridPaneUtils.addGridRow(pane, row++, 0, "Port number (integer), or leave blank to use the default Py4J port",
 				labelPort, tfPort);
 				
 		var labelAuthToken = new Label("Token");
@@ -193,12 +193,12 @@ public class QuPathPy4JExtension implements QuPathExtension {
 		});
 		btnCopyToken.setTooltip(new Tooltip("Copy authentication token to clipboard (to use in Python)"));
 
-		PaneTools.addGridRow(pane, row++, 0, "Authentication token - if provided, this needs to be entered on the Python side",
+		GridPaneUtils.addGridRow(pane, row++, 0, "Authentication token - if provided, this needs to be entered on the Python side",
 				labelAuthToken, tfAuthToken);
-		var paneButtons = PaneTools.createColumnGrid(btnRandomToken, btnCopyToken);
+		var paneButtons = GridPaneUtils.createColumnGrid(btnRandomToken, btnCopyToken);
 		paneButtons.setHgap(5);
-		PaneTools.setMaxWidth(Double.MAX_VALUE, btnRandomToken, btnCopyToken);
-		PaneTools.addGridRow(pane, row++, 0, null, null, paneButtons, paneButtons);
+		GridPaneUtils.setMaxWidth(Double.MAX_VALUE, btnRandomToken, btnCopyToken);
+		GridPaneUtils.addGridRow(pane, row++, 0, null, null, paneButtons, paneButtons);
 		
 		var result = Dialogs.builder()
 				.title(title)
@@ -279,7 +279,7 @@ public class QuPathPy4JExtension implements QuPathExtension {
 	// TODO: Update when version is stabilized
 	@Override
 	public Version getQuPathVersion() {
-		return Version.parse("v0.4.0-SNAPSHOT");
+		return Version.parse("v0.5.0-SNAPSHOT");
 	}
 	
 	

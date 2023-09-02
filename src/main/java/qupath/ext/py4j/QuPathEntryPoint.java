@@ -24,6 +24,7 @@ import com.google.gson.reflect.TypeToken;
 import ij.ImagePlus;
 import ij.io.FileSaver;
 import javafx.application.Platform;
+import qupath.fx.utils.FXUtils;
 import qupath.imagej.tools.IJTools;
 import qupath.lib.awt.common.BufferedImageTools;
 import qupath.lib.common.GeneralTools;
@@ -40,7 +41,6 @@ import qupath.lib.io.FeatureCollection;
 import qupath.lib.io.GsonTools;
 import qupath.lib.objects.PathObject;
 import qupath.lib.projects.ProjectImageEntry;
-import qupath.lib.regions.ImagePlane;
 import qupath.lib.regions.RegionRequest;
 import qupath.lib.roi.interfaces.ROI;
 
@@ -53,7 +53,6 @@ import java.util.Base64;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -100,7 +99,7 @@ public class QuPathEntryPoint extends QPEx {
 	}
 
 	public static boolean openInQuPath(ProjectImageEntry entry) {
-		return GuiTools.callOnApplicationThread(() -> getQuPath().openImageEntry(entry));
+		return FXUtils.callOnApplicationThread(() -> getQuPath().openImageEntry(entry));
 	}
 	
 	public static String getDetectionMeasurementTable(ImageData<?> imageData) {

@@ -26,10 +26,10 @@ ext.moduleName = 'qupath.extension.py4j'
 
 description = 'Connect QuPath to Python using Py4J'
 
-version = "0.0.1-SNAPSHOT"
+version = "0.1.0-SNAPSHOT"
 
 dependencies {
-    def qupathVersion = "0.4.3" // For now
+    def qupathVersion = "0.5.0-SNAPSHOT" // For now
 
     shadow "io.github.qupath:qupath-gui-fx:${qupathVersion}"
     shadow 'org.kordamp.ikonli:ikonli-javafx:12.3.1'
@@ -37,6 +37,7 @@ dependencies {
     shadow "org.slf4j:slf4j-api:2.0.0"
 
     shadow libs.guava
+    shadow libs.qupath.fxtras
 
     implementation 'net.sf.py4j:py4j:0.10.9.7'
 
@@ -61,11 +62,11 @@ tasks.register("copyDependencies", Copy) {
 }
 
 /*
- * Ensure Java 11 compatibility
+ * Ensure Java 17 compatibility
  */
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(11)
+        languageVersion = JavaLanguageVersion.of(17)
     }
     if (project.properties['sources'])
 	    withSourcesJar()
