@@ -49,8 +49,8 @@ import py4j.GatewayServer;
 import py4j.GatewayServerListener;
 import py4j.Py4JServerConnection;
 import qupath.lib.common.Version;
-import qupath.lib.gui.ActionTools;
 import qupath.lib.gui.QuPathGUI;
+import qupath.lib.gui.actions.ActionTools;
 import qupath.lib.gui.dialogs.Dialogs;
 import qupath.lib.gui.extensions.QuPathExtension;
 import qupath.lib.gui.prefs.PathPrefs;
@@ -92,13 +92,13 @@ public class QuPathPy4JExtension implements QuPathExtension {
 				
 		
 		var action = createGatewayAction();
-		
+
 		var mi = ActionTools.createMenuItem(action);
 		mi.graphicProperty().unbind();
 		mi.setGraphic(createGatewayIcon(command.gatewayRunningProperty()));
 		mi.visibleProperty().bind(enablePy4J);
 		
-		var btn = ActionTools.createButton(action, true);
+		var btn = ActionTools.createButton(action);
 		btn.textProperty().unbind();
 		btn.graphicProperty().unbind();
 		btn.getStyleClass().add("toggle-button");
