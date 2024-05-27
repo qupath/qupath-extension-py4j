@@ -1,12 +1,12 @@
 /*-
  * Copyright 2022 QuPath developers,  University of Edinburgh
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -24,6 +24,7 @@ import com.google.gson.reflect.TypeToken;
 import ij.ImagePlus;
 import ij.io.FileSaver;
 import javafx.application.Platform;
+import qupath.fx.utils.FXUtils;
 import qupath.imagej.tools.IJTools;
 import qupath.lib.awt.common.BufferedImageTools;
 import qupath.lib.common.GeneralTools;
@@ -61,15 +62,15 @@ import java.util.stream.Stream;
 /**
  * Entry point for use with a Py4J Gateway.
  * This provides useful methods to work with QuPath from Python.
- * 
+ *
  * @author Pete Bankhead
  */
 public class QuPathEntryPoint extends QPEx {
-	
+
 	public static String getExtensionVersion() {
 		return GeneralTools.getPackageVersion(QuPathEntryPoint.class);
 	}
-	
+
 	public static byte[] snapshot(QuPathGUI qupath) throws IOException {
 		// If we return the snapshot too quickly, we may not see the result of recent actions
 		try {
@@ -100,21 +101,21 @@ public class QuPathEntryPoint extends QPEx {
 	}
 
 	public static boolean openInQuPath(ProjectImageEntry entry) {
-		return GuiTools.callOnApplicationThread(() -> getQuPath().openImageEntry(entry));
+		return FXUtils.callOnApplicationThread(() -> getQuPath().openImageEntry(entry));
 	}
-	
+
 	public static String getDetectionMeasurementTable(ImageData<?> imageData) {
 		if (imageData == null)
 			return "";
 		return getMeasurementTable(imageData, imageData.getHierarchy().getDetectionObjects());
 	}
-	
+
 	public static String getAnnotationMeasurementTable(ImageData<?> imageData) {
 		if (imageData == null)
 			return "";
 		return getMeasurementTable(imageData, imageData.getHierarchy().getAnnotationObjects());
 	}
-	
+
 	public static String getMeasurementTable(ImageData<?> imageData, Collection<? extends PathObject> pathObjects) {
 		if (imageData == null || pathObjects == null || pathObjects.isEmpty())
 			return "";
@@ -122,7 +123,7 @@ public class QuPathEntryPoint extends QPEx {
 		table.setImageData(imageData, pathObjects);
 		return SummaryMeasurementTableCommand.getTableModelString(table, "\t", Collections.emptyList());
 	}
-		
+
 	/**
 	 * Create a {@link PathObject} from a GeoJSON representation.
 	 * @param geoJson
@@ -181,13 +182,13 @@ public class QuPathEntryPoint extends QPEx {
 		}
 	}
 
-	
+
 	public static List<ROI> toROIs(String geoJson) {
-		return GsonTools.getInstance().fromJson(geoJson, 
+		return GsonTools.getInstance().fromJson(geoJson,
 				new TypeToken<List<ROI>>() {}.getType()
-				);
+		);
 	}
-	
+
 	/**
 	 * Convert a collection of PathObjects to a GeoJSON FeatureCollection.
 	 * If there is a chance the resulting string will be too long, prefer instead
@@ -229,7 +230,10 @@ public class QuPathEntryPoint extends QPEx {
 	}
 
 	public static List<Double> getMeasurements(Collection<? extends PathObject> pathObjects, String name) {
-		return pathObjects.stream().map(p -> p.getMeasurements().getOrDefault(name, null)).collect(Collectors.toList());
+		return pathObjects.stream()
+				.map(p -> p.getMeasurements().getOrDefault(name, null))
+				.map(Number::doubleValue)
+				.toList();
 	}
 
 	private static <T> Stream<T> toStream(Collection<T> collection, int minSizeForParallelism) {
@@ -242,25 +246,25 @@ public class QuPathEntryPoint extends QPEx {
 	public static String toGeoJsonFeature(PathObject pathObject) {
 		return GsonTools.getInstance().toJson(pathObject);
 	}
-	
+
 	public static String toGeoJson(ROI roi) {
 		return GsonTools.getInstance().toJson(roi);
 	}
-	
+
 
 	public static byte[] getTiffStack(ImageServer<BufferedImage> server, double downsample) throws IOException {
 		return getTiffStack(server, downsample, 0, 0, server.getWidth(), server.getHeight());
 	}
 
 	public static byte[] getTiffStack(ImageServer<BufferedImage> server, double downsample, int x, int y, int width, int height) throws IOException {
-		return getTiffStack(server, downsample, x, y, width, height, 0, 0);		
+		return getTiffStack(server, downsample, x, y, width, height, 0, 0);
 	}
 
 	public static byte[] getTiffStack(ImageServer<BufferedImage> server, double downsample, int x, int y, int width, int height, int z, int t) throws IOException {
-		return getTiffStack(server, RegionRequest.createInstance(server.getPath(), 
-							downsample, x, y, width, height, z, t));	
+		return getTiffStack(server, RegionRequest.createInstance(server.getPath(),
+				downsample, x, y, width, height, z, t));
 	}
-	
+
 	public static byte[] getTiffStack(ImageServer<BufferedImage> server, RegionRequest request) throws IOException {
 		var imp = IJTools.extractHyperstack(server, request);
 		return toTiffBytes(imp);
@@ -281,17 +285,17 @@ public class QuPathEntryPoint extends QPEx {
 	public static String getTiffStackBase64(ImageServer<BufferedImage> server, RegionRequest request) throws IOException {
 		return base64Encode(getTiffStack(server, request));
 	}
-	
+
 	public static byte[] getImageBytes(ImageServer<BufferedImage> server, double downsample, String format) throws IOException {
 		return getImageBytes(server, downsample, 0, 0, server.getWidth(), server.getHeight(), format);
 	}
 
 	public static byte[] getImageBytes(ImageServer<BufferedImage> server, double downsample, int x, int y, int width, int height, String format) throws IOException {
-		return getImageBytes(server, downsample, x, y, width, height, 0, 0, format);		
+		return getImageBytes(server, downsample, x, y, width, height, 0, 0, format);
 	}
 
 	public static byte[] getImageBytes(ImageServer<BufferedImage> server, double downsample, int x, int y, int width, int height, int z, int t, String format) throws IOException {
-		var request = RegionRequest.createInstance(server.getPath(), 
+		var request = RegionRequest.createInstance(server.getPath(),
 				downsample, x, y, width, height, z, t);
 		byte[] result = getImageBytes(server, request, format);
 		return result;
@@ -352,16 +356,16 @@ public class QuPathEntryPoint extends QPEx {
 			var imp = IJTools.convertToUncalibratedImagePlus("Image", img);
 			return toTiffBytes(imp);
 		}
-		
+
 		try (var stream = new ByteArrayOutputStream(Math.min(1024*1024*10, img.getWidth() * img.getHeight() + 1024))) {
 			ImageIO.write(img, format, stream);
 			var array = stream.toByteArray();
 			return array;
 		}
-		
+
 	}
-	
-	
+
+
 	private static byte[] toTiffBytes(ImagePlus imp) {
 		return new FileSaver(imp).serialize();
 	}
