@@ -16,9 +16,14 @@
 
 package qupath.ext.py4j;
 
+import java.io.IOException;
 import java.util.Map;
+import java.util.Optional;
+import java.util.ResourceBundle;
 import java.util.UUID;
 
+import javafx.scene.control.Menu;
+import javafx.scene.control.MenuItem;
 import org.controlsfx.control.action.Action;
 import org.kordamp.ikonli.javafx.StackedFontIcon;
 import org.slf4j.Logger;
@@ -33,7 +38,6 @@ import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.value.ObservableBooleanValue;
 import javafx.beans.value.ObservableValue;
 import javafx.css.PseudoClass;
-import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
@@ -45,32 +49,34 @@ import javafx.scene.input.Clipboard;
 import javafx.scene.input.DataFormat;
 import javafx.scene.layout.GridPane;
 import javafx.scene.text.TextAlignment;
+import javafx.geometry.Pos;
 import py4j.GatewayServer;
 import py4j.GatewayServerListener;
 import py4j.Py4JServerConnection;
+import qupath.fx.dialogs.Dialogs;
+import qupath.fx.prefs.controlsfx.PropertyItemBuilder;
 import qupath.lib.common.Version;
 import qupath.lib.gui.actions.ActionTools;
 import qupath.lib.gui.QuPathGUI;
-import qupath.lib.gui.dialogs.Dialogs;
 import qupath.lib.gui.extensions.QuPathExtension;
+import qupath.lib.gui.localization.QuPathResources;
 import qupath.lib.gui.prefs.PathPrefs;
+import qupath.lib.gui.tools.MenuTools;
 import qupath.lib.gui.tools.PaneTools;
 
 
 /**
- * QuPath extension to enable Python and Java/QuPath to communicate, via Py4J (http://py4j.org).
+ * QuPath extension to enable Python and Java/QuPath to communicate, via <a href="http://py4j.org">Py4J</a>.
  *
  * @author Pete Bankhead
  */
 public class QuPathPy4JExtension implements QuPathExtension {
 
 	private final static Logger logger = LoggerFactory.getLogger(QuPathPy4JExtension.class);
-
+	private final BooleanProperty enablePy4J = PathPrefs.createPersistentPreference("enablePy4J", true);
+	private static final ResourceBundle resources = UiUtilities.getResources();
+	private final Py4JCommand command = new Py4JCommand();
 	private boolean isInstalled = false;
-
-	private BooleanProperty enablePy4J = PathPrefs.createPersistentPreference("enablePy4J", true);
-
-	private Py4JCommand command = new Py4JCommand();
 
 	@Override
 	public void installExtension(QuPathGUI qupath) {
@@ -79,24 +85,36 @@ public class QuPathPy4JExtension implements QuPathExtension {
 			return;
 		}
 
-		isInstalled = true;
+		qupath.getPreferencePane().getPropertySheet().getItems().add(new PropertyItemBuilder<>(enablePy4J, Boolean.class)
+				.resourceManager(QuPathResources.getLocalizedResourceManager())
+				.name(resources.getString("PreferencePane.name"))
+				.category(resources.getString("PreferencePane.category"))
+				.description(resources.getString("PreferencePane.description"))
+				.build()
+		);
 
-		qupath.getPreferencePane().addPropertyPreference(
-				enablePy4J,
-				Boolean.class,
-				"Enable Py4J",
-				"Py4J",
-				"Enable Py4J through the UI to accept connections - "
-						+ "this enables QuPath to communicate with Python.\n"
-						+ "See www.py4j.org for more info.");
+		Gateway gateway = new Gateway();
+		gateway.isRunning().addListener((p, o, n) -> {
+			if (n) {
+				Dialogs.showInfoNotification("Py4J", "Py4J Gateway started");
+			} else {
+				Dialogs.showInfoNotification("Py4J", "Py4J Gateway stopped");
+			}
+		});
+
+		//TODO: singleu Runnable for button and menu
+		MenuTools.addMenuItems(
+				qupath.getMenu("Extensions", false),
+				createPy4JMenu(gateway)
+		);
+
+		qupath.getToolBar().getItems().add(createGatewayButton(gateway));
+
+
+
 
 
 		var action = createGatewayAction();
-
-		var mi = ActionTools.createMenuItem(action);
-		mi.graphicProperty().unbind();
-		mi.setGraphic(createGatewayIcon(command.gatewayRunningProperty()));
-		mi.visibleProperty().bind(enablePy4J);
 
 		var btn = ActionTools.createButtonWithGraphicOnly(action);
 		btn.textProperty().unbind();
@@ -116,11 +134,69 @@ public class QuPathPy4JExtension implements QuPathExtension {
 
 		qupath.getToolBar().getItems().add(btn);
 
+
 		var menu = qupath.getMenu("Extensions>Py4J", true);
 		menu.visibleProperty().bind(enablePy4J);
+		var mi = ActionTools.createMenuItem(action);
+		mi.graphicProperty().unbind();
+		mi.setGraphic(createGatewayIcon(command.gatewayRunningProperty()));
+		mi.visibleProperty().bind(enablePy4J);
 		menu.getItems().add(mi);
+
+		isInstalled = true;
 	}
 
+	private MenuItem createPy4JMenu(Gateway gateway) {
+		MenuItem gatewayMenu = new MenuItem();
+		gatewayMenu.textProperty().bind(Bindings.when(gateway.isRunning())
+				.then("Stop Py4J Gateway")
+				.otherwise("Start Py4J Gateway"));
+		gatewayMenu.setGraphic(createGatewayIcon(gateway.isRunning()));
+		gatewayMenu.setOnAction(e -> {
+			if (gateway.isRunning().get()) {
+				gateway.stop();
+			} else {
+				promptToStartGateway2();
+			}
+		});
+
+		Menu py4JMenu = new Menu("Py4J");
+		py4JMenu.visibleProperty().bind(enablePy4J);
+		py4JMenu.getItems().add(gatewayMenu);
+
+		return py4JMenu;
+	}
+
+	private Button createGatewayButton(Gateway gateway) {
+		Button gatewayButton = new Button();
+
+		gatewayButton.setTooltip(new Tooltip("Start a Py4J Gateway to communicate between QuPath and Python"));
+		gatewayButton.visibleProperty().bind(enablePy4J);
+		gatewayButton.setGraphic(createGatewayIcon(gateway.isRunning()));
+		gatewayButton.setOnAction(e -> {
+			if (gateway.isRunning().get()) {
+				gateway.stop();
+			} else {
+				promptToStartGateway2();
+			}
+		});
+
+		return gatewayButton;
+	}
+
+	private Node createGatewayIcon(ObservableBooleanValue gatewayOn) {
+		StackedFontIcon icon = new StackedFontIcon();
+
+		icon.setIconCodeLiterals("ion4-logo-python");
+		icon.setStyle("-fx-icon-color: -fx-text-fill;");
+		icon.getStyleClass().add("qupath-icon");
+		icon.styleProperty().bind(Bindings.when(gatewayOn)
+				.then("-fx-icon-color: rgb(200, 20, 20);")
+				.otherwise("-fx-icon-color: -fx-text-fill;")
+		);
+
+		return icon;
+	}
 
 	private Action createGatewayAction() {
 		var action = new Action("Py4J", e -> {
@@ -143,6 +219,25 @@ public class QuPathPy4JExtension implements QuPathExtension {
 
 	private Integer port = GatewayServer.DEFAULT_PORT;
 	private String token = "";
+
+	private void promptToStartGateway2() {
+		GatewayCreator gatewayCreator;
+		try {
+			gatewayCreator = new GatewayCreator(port);
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+
+		Optional<ButtonType> buttonPressed = Dialogs.builder()
+				.title("Py4J Gateway")
+				.content(gatewayCreator)
+				.buttons(ButtonType.OK, ButtonType.CANCEL)
+				.showAndWait();
+
+		if (buttonPressed.isPresent() && buttonPressed.get().equals(ButtonType.OK)) {
+
+		}
+	}
 
 
 	private boolean promptToStartGateway() {
@@ -246,23 +341,6 @@ public class QuPathPy4JExtension implements QuPathExtension {
 	}
 
 
-	private Node createGatewayIcon(ObservableBooleanValue gatewayOn) {
-		var icon = new StackedFontIcon();
-		icon.setIconCodeLiterals("ion4-logo-python");
-		icon.setStyle("-fx-icon-color: -fx-text-fill;");
-		icon.getStyleClass().add("qupath-icon");
-		if (gatewayOn != null) {
-			icon.styleProperty().bind(Bindings.createObjectBinding(() -> {
-				if (gatewayOn.get()) {
-					return "-fx-icon-color: rgb(200, 20, 20);";
-				} else {
-					return "-fx-icon-color: -fx-text-fill;";
-				}
-			}, gatewayOn));
-		} else
-			icon.setStyle("-fx-icon-color: -fx-text-fill;");
-		return icon;
-	}
 
 
 
