@@ -1,4 +1,4 @@
-package qupath.ext.py4j;
+package qupath.ext.py4j.gui;
 
 import javafx.fxml.FXMLLoader;
 
@@ -9,7 +9,7 @@ import java.util.ResourceBundle;
 /**
  * Utility methods related to the user interface.
  */
-public class UiUtilities {
+class UiUtilities {
 
     private static final ResourceBundle resources = ResourceBundle.getBundle("qupath.ext.py4j.strings");
 
