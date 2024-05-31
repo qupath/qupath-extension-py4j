@@ -10,8 +10,8 @@ import py4j.GatewayServer;
  */
 public class GatewayManager {
 
-    private GatewayServer server;
     private final BooleanProperty running = new SimpleBooleanProperty(false);
+    private GatewayServer server;
 
     /**
      * Start a new {@link GatewayServer} with the provided parameters. If a
