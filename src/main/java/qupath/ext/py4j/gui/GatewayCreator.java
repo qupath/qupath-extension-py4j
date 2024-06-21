@@ -25,7 +25,7 @@ import java.util.regex.Pattern;
  */
 class GatewayCreator extends VBox {
 
-    private static final ResourceBundle resources = UiUtilities.getResources();
+    private static final ResourceBundle resources = UiUtils.getResources();
     @FXML
     private TextField port;
     @FXML
@@ -40,7 +40,7 @@ class GatewayCreator extends VBox {
      * @throws IOException when an error occurs while creating the window
      */
     public GatewayCreator(int port) throws IOException {
-        UiUtilities.loadFXML(this, GatewayCreator.class.getResource("gateway_creator.fxml"));
+        UiUtils.loadFXML(this, GatewayCreator.class.getResource("gateway_creator.fxml"));
 
         this.port.setPromptText(MessageFormat.format(resources.getString("GatewayCreator.defaultPort"), port));
         this.port.setTextFormatter(new TextFormatter<>(getPositiveIntegerFilter()));

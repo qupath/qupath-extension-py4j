@@ -9,11 +9,11 @@ import java.util.ResourceBundle;
 /**
  * Utility methods related to the user interface.
  */
-class UiUtilities {
+class UiUtils {
 
     private static final ResourceBundle resources = ResourceBundle.getBundle("qupath.ext.py4j.strings");
 
-    private UiUtilities() {
+    private UiUtils() {
         throw new AssertionError("This class is not instantiable.");
     }
 

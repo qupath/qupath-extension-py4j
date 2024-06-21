@@ -26,7 +26,7 @@ public class GatewayManager {
         server = new GatewayServer.GatewayServerBuilder()
                 .entryPoint(new QuPathEntryPoint())
                 .javaPort(port > 0 ? port : GatewayServer.DEFAULT_PORT)
-                .authToken(token.isBlank() ? null : token)
+                .authToken(token == null || token.isBlank() ? null : token)
                 .build();
 
         server.addListener(new Py4JListener(running -> {

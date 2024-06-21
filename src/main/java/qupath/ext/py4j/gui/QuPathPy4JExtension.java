@@ -1,5 +1,5 @@
 /*-
- * Copyright 2024 QuPath developers,  University of Edinburgh
+ * Copyright 2024 QuPath developers, University of Edinburgh
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@ public class QuPathPy4JExtension implements QuPathExtension, GitHubProject {
 	private static final BooleanProperty enablePy4J = PathPrefs.createPersistentPreference("enablePy4J", true);
 	private static final Version EXTENSION_QUPATH_VERSION = Version.parse("v0.5.1");
 	private static final Logger logger = LoggerFactory.getLogger(QuPathPy4JExtension.class);
-	private static final ResourceBundle resources = UiUtilities.getResources();
+	private static final ResourceBundle resources = UiUtils.getResources();
 	private boolean isInstalled = false;
 
 	@Override
