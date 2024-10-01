@@ -10,12 +10,12 @@ ext.moduleName = 'qupath.extension.py4j'
 
 base {
     archivesName = rootProject.name
-    version = '0.0.1-SNAPSHOT'
+    version = '0.1.0-SNAPSHOT'
     description = 'Connect QuPath to Python using Py4J'
 }
 
 ext.qupathVersion = gradle.ext.qupathVersion
-ext.qupathJavaVersion = 17
+ext.qupathJavaVersion = libs.versions.jdk.get() as Integer
 
 dependencies {
     shadow "io.github.qupath:qupath-gui-fx:${qupathVersion}"
@@ -88,7 +88,7 @@ java {
  * Create javadocs for all modules/packages in one place.
  * Use -PstrictJavadoc=true to fail on error with doclint (which is rather strict).
  */
-tasks.withType(Javadoc) {
+tasks.withType(Javadoc).configureEach {
     options.encoding = 'UTF-8'
     def strictJavadoc = findProperty('strictJavadoc')
     if (!strictJavadoc) {
@@ -107,7 +107,7 @@ tasks.named('compileJava') {
  * Avoid 'Entry .gitkeep is a duplicate but no duplicate handling strategy has been set.'
  * when using withSourcesJar()
  */
-tasks.withType(org.gradle.jvm.tasks.Jar) {
+tasks.withType(org.gradle.jvm.tasks.Jar).configureEach {
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
 }
 

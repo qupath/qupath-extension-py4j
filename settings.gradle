@@ -1,6 +1,6 @@
 rootProject.name = 'qupath-extension-py4j'
 
-gradle.ext.qupathVersion = "0.5.1"
+gradle.ext.qupathVersion = "0.6.0-SNAPSHOT"
 
 dependencyResolutionManagement {
 
