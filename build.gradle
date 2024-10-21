@@ -13,6 +13,7 @@ base {
     archivesName = rootProject.name
     version = '0.1.0-SNAPSHOT'
     description = 'Connect QuPath to Python using Py4J'
+    group = 'io.github.qupath'
 }
 
 ext.qupathVersion = gradle.ext.qupathVersion
