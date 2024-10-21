@@ -37,5 +37,6 @@ Further documentation can be found in the [qubalab project](https://github.com/q
 ## Development
 
 It's recommended to use the extension setup described in
-[the QuPath extension template](https://github.com/qupath/qupath-extension-template)
+[the QuPath extension template](https://github.com/qupath/qupath-extension-template?tab=readme-ov-file#set-up-in-an-ide-optional)
 for this extension.
+
