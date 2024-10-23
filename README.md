@@ -4,6 +4,8 @@ This extension aims to provide a link between QuPath and Python using [Py4J](htt
 
 ## Installation
 
+If you're using QuPath v0.6.0-rc3 (release candidate 3), then you don't need to install this --- it's included by default.
+
 You can install this extension the same as other QuPath extensions,
 as described in [the docs](https://qupath.readthedocs.io/en/latest/docs/intro/extensions.html#installing-extensions).
 
