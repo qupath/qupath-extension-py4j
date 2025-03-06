@@ -12,8 +12,8 @@ import qupath.imagej.tools.IJTools;
 import qupath.lib.awt.common.BufferedImageTools;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
-import qupath.lib.gui.commands.SummaryMeasurementTableCommand;
 import qupath.lib.gui.measure.ObservableMeasurementTableData;
+import qupath.lib.gui.measure.PathTableData;
 import qupath.lib.gui.scripting.QPEx;
 import qupath.lib.gui.tools.GuiTools;
 import qupath.lib.gui.tools.GuiTools.SnapshotType;
@@ -136,20 +136,41 @@ public class QuPathEntryPoint extends QPEx {
 	}
 
 	/**
-	 * Return the measurement table in text format of the provided annotations/detections
-	 * of the provided image.
+	 * Return the measurement table in as a single tab-delimited string.
+	 * This is equivalent to joining all the rows provided by {@link #getMeasurementTableRows(ImageData, Collection)}
+	 * with newline characters.
+	 * <p>
+	 * Note that this may fail for very large tables, because the length of the text exceeds the
+	 * maximum length of a Java String.
+	 * In this case, using {@link #getMeasurementTableRows(ImageData, Collection)} is preferable,
+	 * or alternatively pass fewer objects to measure.
 	 *
 	 * @param imageData  the image containing the measurements to retrieve
 	 * @param pathObjects  the objects containing the measurements to retrieve
 	 * @return a string representation of the measurement table
+	 * @see #getMeasurementTableRows(ImageData, Collection)
 	 */
 	public static String getMeasurementTable(ImageData<?> imageData, Collection<? extends PathObject> pathObjects) {
+		return String.join(System.lineSeparator(), getMeasurementTableRows(imageData, pathObjects));
+	}
+
+	/**
+	 * Return the measurement table in a list of tab-delimited strings.
+	 * <p>
+	 * The first item corresponds to the header, while the rest correspond to objects in the provided collection.
+	 *
+	 * @param imageData  the image containing the measurements to retrieve
+	 * @param pathObjects  the objects containing the measurements to retrieve
+	 * @return a list of strings representing the measurement table
+	 * @see #getMeasurementTable(ImageData, Collection)
+	 */
+	public static List<String> getMeasurementTableRows(ImageData<?> imageData, Collection<? extends PathObject> pathObjects) {
 		if (imageData == null || pathObjects == null || pathObjects.isEmpty()) {
-			return "";
+			return Collections.emptyList();
 		} else {
 			var table = new ObservableMeasurementTableData();
 			table.setImageData(imageData, pathObjects);
-			return SummaryMeasurementTableCommand.getTableModelString(table, "\t", Collections.emptyList());
+			return table.getRowStrings("\t", PathTableData.DEFAULT_DECIMAL_PLACES, null);
 		}
 	}
 
