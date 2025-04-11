@@ -1,6 +1,6 @@
 plugins {
-	id("qupath-conventions")
 	id("com.gradleup.shadow") version "8.3.5"
+	id("qupath-conventions")
 	`maven-publish`
 }
 
