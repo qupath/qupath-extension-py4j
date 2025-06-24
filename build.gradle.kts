@@ -6,7 +6,7 @@ plugins {
 
 qupathExtension {
 	name = "qupath-extension-py4j"
-	version = "0.1.0-rc1"
+	version = "0.1.0"
 	group = "io.github.qupath"
 	description = "Connect QuPath to Python using Py4J"
 	automaticModule = "qupath.extension.py4j"
