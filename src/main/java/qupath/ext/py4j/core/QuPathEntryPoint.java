@@ -299,7 +299,7 @@ public class QuPathEntryPoint extends QPEx {
 	 */
 	public static List<String> getMeasurementNames(Collection<? extends PathObject> pathObjects) {
 		return pathObjects.stream()
-				.flatMap(p -> p.getMeasurementList().getMeasurementNames().stream())
+				.flatMap(p -> p.getMeasurementList().getNames().stream())
 				.distinct()
 				.toList();
 	}
