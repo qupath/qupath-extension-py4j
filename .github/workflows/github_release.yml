@@ -9,4 +9,4 @@ jobs:
       contents: write
     uses: qupath/actions/.github/workflows/github-release.yml@main
     with:
-      gradle-args: shadowJar
+      gradle-args: sources javadocJar shadowJar
