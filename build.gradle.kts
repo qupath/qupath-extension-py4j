@@ -6,7 +6,7 @@ plugins {
 
 qupathExtension {
 	name = "qupath-extension-py4j"
-	version = "0.1.1"
+	version = "0.2.0-SNAPSHOT"
 	group = "io.github.qupath"
 	description = "Connect QuPath to Python using Py4J"
 	automaticModule = "qupath.extension.py4j"
@@ -14,13 +14,14 @@ qupathExtension {
 
 dependencies {
 
-	shadow(libs.bundles.qupath)
+	shadow(libs.qupath.core)
+	shadow(libs.qupath.gui.fx)
 	shadow(libs.bundles.logging)
 	shadow(libs.qupath.fxtras)
 	shadow(libs.ikonli.javafx)
 	shadow(libs.guava)
 
-	implementation("net.sf.py4j:py4j:0.10.9.7")
+	implementation("net.sf.py4j:py4j:0.10.9.9")
 
 	// For testing
 	testImplementation(libs.bundles.qupath)
